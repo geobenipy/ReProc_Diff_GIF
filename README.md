@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # SGY to GIF Comparison Tool
 
 This Python script creates animated GIFs that flip between Pre- and Post-Processing seismic data. 
@@ -14,4 +15,8 @@ It processes all matching SEG-Y (.sgy) files in the specified input directories 
 2. Run the script:
 
 ```bash
-python sgy_to_gif.py
+python ReProc_Diff_GIF.py
+=======
+# ReProc_Diff_GIF
+Takes two SEGY files and generates a GIF out of them showing ReProcessing advances
+>>>>>>> fd02f55eab43a0f6446e16b9e923601fd4f408f6
