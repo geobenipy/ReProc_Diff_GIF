@@ -20,11 +20,11 @@ from tqdm import tqdm
 # ============================================================================
 CONFIG = {
     # Input directories
-    'pre_sgy_dir': r"D:\Haimerl\PhD\Vista\AL641\Export\PyAID\Data\Brutstack",
-    'post_sgy_dir': r"D:\Haimerl\PhD\Vista\AL641\Export\PyAID\Label\Brutstack",
+    'pre_sgy_dir': r"D:\Haimerl\PhD\Vista\M177\M177_OnBoard",
+    'post_sgy_dir': r"D:\Haimerl\PhD\Vista\M177\M177_SEGY-Export_Malte",
     
     # Output settings
-    'output_gif_dir': r"C:\Users\u301640\Desktop\GIFS",
+    'output_gif_dir': r"D:\Haimerl\PhD\Vista\M177\Gif_change",
     'frame_duration_ms': 500,
     
     # Display settings
@@ -45,7 +45,7 @@ CONFIG = {
 # LOGGING SETUP
 # ============================================================================
 logging.basicConfig(
-    level=logging.ERROR,
+    level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%H:%M:%S'
 )
@@ -137,6 +137,15 @@ def create_frame(data, label, config):
 def create_gif(pre_data, post_data, output_path, config):
     """Create animated GIF flipping between Pre and Post"""
     
+    # Crop to smallest common dimensions
+    min_traces = min(pre_data.shape[0], post_data.shape[0])
+    min_samples = min(pre_data.shape[1], post_data.shape[1])
+    
+    pre_data = pre_data[:min_traces, :min_samples]
+    post_data = post_data[:min_traces, :min_samples]
+    
+    logger.info(f"Cropped to common shape: {pre_data.shape}")
+    
     # Normalize data if requested
     if config['normalize_data']:
         pre_data = normalize_data(pre_data, config['clip_percentile'])
@@ -217,8 +226,13 @@ def main():
         # Match files by suffix (e.g., P101, P102)
         # Extract the last part after underscore (e.g., "P101" from "OnBoard_Brutstack_P101")
         def extract_id(filename):
-            """Extract matching ID from filename (last part after underscore)"""
-            return filename.stem.split('_')[-1]
+            """Extract matching ID from filename (profile number like P01, P02)"""
+            # Find the profile number (e.g., P01, P02, P30a)
+            import re
+            match = re.search(r'(P\d+[a-z]?)', filename.stem)
+            if match:
+                return match.group(1)
+            return filename.stem.split('_')[-1]  # Fallback
         
         pre_dict = {extract_id(f): f for f in pre_files}
         post_dict = {extract_id(f): f for f in post_files}
