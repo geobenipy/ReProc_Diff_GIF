@@ -14,17 +14,18 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 from PIL import Image
 import segyio
 from tqdm import tqdm
+from scipy.signal import resample
 
 # ============================================================================
 # CONFIGURATION SECTION
 # ============================================================================
 CONFIG = {
     # Input directories
-    'pre_sgy_dir': r"D:\Haimerl\PhD\Vista\M177\M177_OnBoard",
-    'post_sgy_dir': r"D:\Haimerl\PhD\Vista\M177\M177_SEGY-Export_Malte",
+    'pre_sgy_dir': r"E:\!!Publications\Others\Franzosen_Profile\Profile\Import",
+    'post_sgy_dir': r"E:\!!Publications\Others\Franzosen_Profile\Profile\Export",
     
     # Output settings
-    'output_gif_dir': r"D:\Haimerl\PhD\Vista\M177\Gif_change",
+    'output_gif_dir': r"E:\!!Publications\Others\Franzosen_Profile\Profile",
     'frame_duration_ms': 500,
     
     # Display settings
@@ -45,7 +46,7 @@ CONFIG = {
 # LOGGING SETUP
 # ============================================================================
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.ERROR,
     format='%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%H:%M:%S'
 )
@@ -71,8 +72,10 @@ def load_sgy_data(filepath):
     logger.info(f"Loading {filepath.name}")
     with segyio.open(str(filepath), ignore_geometry=True) as f:
         data = np.array([np.copy(trace) for trace in f.trace])
-    logger.info(f"Loaded shape: {data.shape}")
-    return data
+        sample_interval_us = f.bin[segyio.BinField.Interval]  # in Mikrosekunden
+    sample_rate_hz = 1_000_000 / sample_interval_us
+    logger.info(f"Loaded shape: {data.shape}, Sample Rate: {sample_rate_hz:.1f} Hz")
+    return data, sample_rate_hz
 
 
 def normalize_data(data, clip_percentile=99):
@@ -134,8 +137,15 @@ def create_frame(data, label, config):
     return img
 
 
-def create_gif(pre_data, post_data, output_path, config):
+def create_gif(pre_data, post_data, output_path, config, pre_sr=None, post_sr=None):
     """Create animated GIF flipping between Pre and Post"""
+
+    # Resample if sample rates differ
+    if pre_sr and post_sr and pre_sr != post_sr:
+        logger.warning(f"Sample rate mismatch: Pre={pre_sr:.1f} Hz, Post={post_sr:.1f} Hz — resampling Post to match Pre")
+        target_samples = int(post_data.shape[1] * (pre_sr / post_sr))
+        post_data = resample(post_data, target_samples, axis=1)
+        logger.info(f"Post resampled to {post_data.shape[1]} samples per trace")
     
     # Crop to smallest common dimensions
     min_traces = min(pre_data.shape[0], post_data.shape[0])
@@ -170,25 +180,24 @@ def create_gif(pre_data, post_data, output_path, config):
 def process_file_pair(pre_file, post_file, output_dir, config):
     """Process a single pair of SGY files"""
     try:
-        # Load data
-        pre_data = load_sgy_data(pre_file)
-        post_data = load_sgy_data(post_file)
+        # Load data + sample rates
+        pre_data, pre_sr = load_sgy_data(pre_file)
+        post_data, post_sr = load_sgy_data(post_file)
         
-        # Validate shapes match
+        if pre_sr != post_sr:
+            print(f"Sample rate mismatch in {pre_file.name}: Pre={pre_sr:.1f} Hz / Post={post_sr:.1f} Hz → wird angeglichen")
+
         if pre_data.shape != post_data.shape:
             logger.warning(f"Shape mismatch for {pre_file.name}: Pre {pre_data.shape} vs Post {post_data.shape}")
-        
-        # Create output filename
+
         output_filename = f"{pre_file.stem}_comparison.gif"
         output_path = output_dir / output_filename
-        
-        # Create GIF
+
         logger.info(f"Creating GIF: {output_filename}")
-        create_gif(pre_data, post_data, output_path, config)
+        create_gif(pre_data, post_data, output_path, config, pre_sr=pre_sr, post_sr=post_sr)
         logger.info(f"Saved: {output_path}")
-        
         return True
-        
+
     except Exception as e:
         logger.error(f"Failed to process {pre_file.name}: {e}")
         return False
